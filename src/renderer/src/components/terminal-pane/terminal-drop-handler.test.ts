@@ -87,6 +87,14 @@ function createTerminalTransport(
 describe('handleTerminalFileDrop', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Why: main passes ordinary paths through unchanged; tests that need a copy override this.
+    mocks.resolveDroppedPathsForAgent
+      .mockReset()
+      .mockImplementation(async ({ paths }: { paths: string[] }) => ({
+        resolvedPaths: paths,
+        skipped: [],
+        failed: []
+      }))
     mocks.storeState.activeRepoId = 'repo1'
     mocks.storeState.activeWorktreeId = 'wt-1'
     vi.stubGlobal('window', {
@@ -337,6 +345,10 @@ describe('handleTerminalFileDrop', () => {
     })
 
     expect(mocks.importExternalPathsToRuntime).not.toHaveBeenCalled()
+    expect(mocks.resolveDroppedPathsForAgent).toHaveBeenCalledExactlyOnceWith({
+      paths: ['/Users/me/spec.pdf'],
+      worktreePath: '/remote/repo'
+    })
     expect(sendInput).toHaveBeenCalledWith('/Users/me/spec.pdf ', 'driving')
     expect(focus).toHaveBeenCalled()
   })
@@ -384,6 +396,7 @@ describe('handleTerminalFileDrop', () => {
     })
 
     expect(mocks.importExternalPathsToRuntime).not.toHaveBeenCalled()
+    expect(mocks.resolveDroppedPathsForAgent).toHaveBeenCalledOnce()
     expect(sendInput).toHaveBeenNthCalledWith(
       1,
       "'/mnt/c/Users/alice/Desktop/notes one.txt' ",
@@ -449,6 +462,7 @@ describe('handleTerminalFileDrop', () => {
       data: { paths: ['/Users/me/spec.pdf'], target: 'terminal' }
     })
 
+    expect(mocks.resolveDroppedPathsForAgent).toHaveBeenCalledOnce()
     expect(sendInputAccepted).toHaveBeenCalledWith('/Users/me/spec.pdf ', 'driving')
     expect(sendInput).not.toHaveBeenCalled()
     expect(focus).toHaveBeenCalled()
@@ -486,6 +500,7 @@ describe('handleTerminalFileDrop', () => {
       data: { paths: ['/Users/me/spec.pdf'], target: 'terminal', paneLeafId: 'leaf-target' }
     })
 
+    expect(mocks.resolveDroppedPathsForAgent).toHaveBeenCalledOnce()
     expect(activeSendInput).not.toHaveBeenCalled()
     expect(activeFocus).not.toHaveBeenCalled()
     expect(targetSendInput).toHaveBeenCalledWith('/Users/me/spec.pdf ', 'driving')

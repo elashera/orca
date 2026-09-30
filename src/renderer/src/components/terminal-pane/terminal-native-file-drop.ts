@@ -41,10 +41,10 @@ export type NativeTerminalFileDropArgs = {
 /**
  * Handle a native file drop targeted at a terminal pane.
  *
- * Local worktrees: paste the local absolute path (reference-in-place; no copy
- * or IPC). SSH worktrees: upload each file into `${worktreePath}/.orca/drops`
- * and paste the remote path so the remote agent can read it. See
- * docs/terminal-drop-ssh.md.
+ * Local worktrees: paste the local absolute path (reference-in-place), except
+ * macOS drag-temp files, which main copies first. SSH worktrees: upload each
+ * file into `${worktreePath}/.orca/drops` and paste the remote path so the
+ * remote agent can read it. See docs/terminal-drop-ssh.md.
  */
 export async function handleNativeTerminalFileDrop(
   args: NativeTerminalFileDropArgs
@@ -222,29 +222,27 @@ async function uploadRuntimeDropPaths(
 async function pasteLocalDropPaths(
   args: NativeDropFlowArgs & { localWslDrop: boolean; targetShell: 'posix' | 'windows' }
 ): Promise<void> {
-  // Why: local WSL worktrees run POSIX shells despite a Windows host, so
-  // dropped paths must use the distro-aware resolver before terminal paste.
-  if (isWslUncPath(args.worktreePath)) {
-    try {
-      const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({
-        paths: args.dataPaths,
-        worktreePath: args.worktreePath
-      })
-      await pasteResolvedDropPaths({ ...args, paths: resolvedPaths, targetShell: 'posix' })
-      reportTerminalDropUploadSkipsAndFailures(skipped, failed)
-    } catch (err) {
-      toast.error(extractIpcErrorMessage(err, 'Failed to resolve dropped files.'))
-    }
-    return
+  // Why: main copies macOS drag-temp files the PTY daemon cannot open and
+  // passes every other path through. Local WSL UNC worktrees run POSIX shells
+  // despite a Windows host, so main also applies the distro-aware rewrite.
+  const wslUncWorktree = isWslUncPath(args.worktreePath)
+  try {
+    const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({
+      paths: args.dataPaths,
+      worktreePath: args.worktreePath
+    })
+    await pasteResolvedDropPaths({
+      ...args,
+      paths:
+        args.localWslDrop && !wslUncWorktree
+          ? resolvedPaths.map(toLocalWslDropPath)
+          : resolvedPaths,
+      targetShell: wslUncWorktree ? 'posix' : args.targetShell
+    })
+    reportTerminalDropUploadSkipsAndFailures(skipped, failed, 'prepare')
+  } catch (err) {
+    toast.error(extractIpcErrorMessage(err, 'Failed to resolve dropped files.'))
   }
-
-  // Why: non-WSL local drops stay reference-in-place. Trailing space
-  // separates multiple paths, matching standard drag-and-drop UX.
-  await pasteResolvedDropPaths({
-    ...args,
-    paths: args.localWslDrop ? args.dataPaths.map(toLocalWslDropPath) : args.dataPaths,
-    targetShell: args.targetShell
-  })
 }
 
 async function uploadRemoteDropPaths(

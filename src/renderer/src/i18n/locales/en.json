@@ -3351,7 +3351,8 @@
                 "internalPathsTooLarge": "Drop path list is too large for a safe terminal paste.",
                 "b4cf68e889": "Skipped {{value0}} {{value1}}.",
                 "writeTimeout": "File drop cancelled: terminal did not accept the path before the safety timeout.",
-                "writeRejected": "File drop cancelled: terminal could not accept the path."
+                "writeRejected": "File drop cancelled: terminal could not accept the path.",
+                "prepareFailed": "Could not prepare {{value0}} dropped {{value1}}."
               }
             }
           },

@@ -84,4 +84,27 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
       { value0: 2, value1: 'files' }
     )
   })
+
+  it('uses local wording and the shared reason for failed local preparation', () => {
+    reportTerminalDropUploadSkipsAndFailures(
+      [],
+      [{ reason: 'File is 3 GB, over the 2 GB per-file limit for dropped files' }],
+      'prepare'
+    )
+
+    expect(mocks.translate).toHaveBeenCalledWith(
+      'auto.components.terminal.pane.terminal.drop.handler.prepareFailed',
+      'Could not prepare {{value0}} dropped {{value1}}.',
+      { value0: 1, value1: 'file' }
+    )
+    expect(toast.error).toHaveBeenCalledWith(expect.not.stringContaining('upload'), {
+      description: 'File is 3 GB, over the 2 GB per-file limit for dropped files'
+    })
+  })
+
+  it('gives no description when local preparation failures differ', () => {
+    reportTerminalDropUploadSkipsAndFailures([], [{ reason: 'a' }, { reason: 'b' }], 'prepare')
+
+    expect(toast.error).toHaveBeenCalledWith(expect.any(String), { description: undefined })
+  })
 })

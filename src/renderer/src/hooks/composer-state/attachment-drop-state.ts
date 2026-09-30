@@ -214,16 +214,31 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
 
   const applyLocalComposerDrop = useCallback(
     async (paths: string[], canApply: () => boolean = () => true): Promise<void> => {
+      if (!mountedRef.current) {
+        return
+      }
       const results: ComposerDropItemResult[] = []
-      for (const filePath of paths) {
+      let resolvedPaths: string[]
+      try {
+        // Why: one call for the whole drop keeps order and a shared size budget;
+        // main copies macOS drag-temp files the agent could not read and
+        // authorizes every path it returns. No project path, so no WSL rewrite.
+        const resolution = await window.api.fs.resolveDroppedPathsForAgent({ paths })
+        resolvedPaths = resolution.resolvedPaths
+        results.push(
+          ...resolution.skipped.map(({ reason }) => ({ status: 'skipped' as const, reason })),
+          ...resolution.failed.map(({ reason }) => ({ status: 'failed' as const, reason }))
+        )
+      } catch (error) {
+        resolvedPaths = []
+        const failure = localDropFailure(readIpcErrorMessage(error))
+        results.push(...paths.map(() => failure))
+      }
+      for (const filePath of resolvedPaths) {
         if (!mountedRef.current) {
           return
         }
         try {
-          await window.api.fs.authorizeExternalPath({ targetPath: filePath })
-          if (!mountedRef.current) {
-            return
-          }
           const stat = await window.api.fs.stat({ filePath })
           results.push({
             status: 'imported',
