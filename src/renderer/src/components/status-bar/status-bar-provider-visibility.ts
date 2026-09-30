@@ -8,10 +8,7 @@ export type UsageProviderSettings = Pick<
   | 'opencodeSessionCookie'
   | 'geminiCliOAuthEnabled'
 > & {
-  // Why: Antigravity has no persisted usage credential in Orca — its `/quota`
-  // read uses the CLI's own session. The checked status-bar item is the durable
-  // user signal; StatusBar only sets this after PATH detection says the agent
-  // is available.
+  // CLI detection lets us await the first poll; it does not prove authentication.
   antigravityUsageConfigured: boolean
   // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean
@@ -81,7 +78,6 @@ export function hasUsageProviderSettings(
     settings?.geminiCliOAuthEnabled === true ||
     Boolean(settings?.opencodeSessionCookie?.trim()) ||
     settings?.opencodeGoApiKeyConfigured === true ||
-    settings?.antigravityUsageConfigured === true ||
     settings?.minimaxCookieConfigured === true ||
     settings?.minimaxApiKeyConfigured === true ||
     settings?.grokAuthConfigured === true ||
@@ -112,8 +108,6 @@ export function hasUsageProviderSettingsForProvider(
     )
   }
   if (providerId === 'antigravity') {
-    // Why: the `/quota` read runs through the detected CLI, so the checked item
-    // is enough — no Gemini OAuth opt-in is required.
     return settings.antigravityUsageConfigured === true
   }
   if (providerId === 'minimax') {
@@ -146,6 +140,9 @@ export function getVisibleUsageProvider(
   provider: ProviderRateLimits | null | undefined,
   settings: Partial<UsageProviderSettings> | null | undefined
 ): ProviderRateLimits | null {
+  if (providerId === 'antigravity' && provider?.status === 'unavailable') {
+    return null
+  }
   if (isProviderConfigured(provider)) {
     return provider
   }

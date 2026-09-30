@@ -1,3 +1,4 @@
+import { getAntigravitySummaryBuckets } from '../../../../shared/antigravity-usage-windows'
 import React from 'react'
 import { ChevronRight, RefreshCw } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
@@ -24,6 +25,9 @@ export type UsageSection = { label: string; window: RateLimitWindow }
 // partial/rehydrated provider can also carry an undefined window; both must be
 // dropped so downstream consumers never dereference `window.usedPercent`.
 function usedSections(p: ProviderRateLimits): UsageSection[] {
+  if (p.provider === 'antigravity' && p.buckets?.length) {
+    return getAntigravitySummaryBuckets(p.buckets).map((window) => ({ label: window.name, window }))
+  }
   return getWindowSections(p).filter(
     (s): s is UsageSection => s.window !== null && s.window !== undefined
   )
@@ -128,18 +132,7 @@ export function UsageRow({
   now: number
   mode?: StatusBarUsageMode
 }): React.JSX.Element {
-  const allSections = usedSections(p)
-  const geminiSections =
-    p.provider === 'antigravity'
-      ? allSections.filter(
-          (section) =>
-            section.label === 'Gemini Models · 5h' || section.label === 'Gemini Models · Weekly'
-        )
-      : []
-  const sections =
-    geminiSections.length > 0
-      ? geminiSections.sort((a, b) => a.window.windowMinutes - b.window.windowMinutes)
-      : allSections
+  const sections = usedSections(p)
   const hasUsage = sections.length > 0
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)

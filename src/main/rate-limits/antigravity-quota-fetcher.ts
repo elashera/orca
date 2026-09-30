@@ -62,7 +62,7 @@ export async function fetchAntigravityRateLimits(options?: {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     // Why: runProcess only rejects when the child could not start, so a missing binary lands here.
-    return message.includes('ENOENT')
+    return error instanceof Error && 'code' in error && error.code === 'ENOENT'
       ? antigravityResult('unavailable', 'Antigravity CLI not found')
       : antigravityResult('error', message)
   }

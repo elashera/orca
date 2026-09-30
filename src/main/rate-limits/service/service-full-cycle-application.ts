@@ -33,9 +33,9 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         geminiResult,
         opencodeGoResult,
         kimiResult,
-        miniMaxResult,
-        antigravityResult
+        miniMaxResult
       ],
+      antigravityResultPromise,
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise
@@ -82,11 +82,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
               geminiResult.reason instanceof Error ? geminiResult.reason.message : 'Unknown error',
             status: 'error'
           } satisfies ProviderRateLimits)
-
-    const antigravityFetch = settleSiblingProviderResult('antigravity', antigravityResult)
-
-    // Why: the CLI's own `/quota` read wins; the borrowed Gemini snapshot is only a fallback.
-    const antigravity = resolveAntigravityRateLimits(antigravityFetch, gemini)
 
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'
@@ -162,7 +157,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       this.trackActiveFailureStreak('codex', codex)
     }
     this.trackActiveFailureStreak('gemini', gemini)
-    this.trackActiveFailureStreak('antigravity', antigravity)
     if (shouldApplyOpencode) {
       this.trackActiveFailureStreak('opencode-go', opencodeGo)
     }
@@ -189,12 +183,26 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
         : this.state.opencodeGo,
       kimi: this.applyStalePolicy(kimi, previousState.kimi),
-      antigravity: this.applyStalePolicy(antigravity, previousState.antigravity),
       minimax: shouldApplyMiniMax
         ? miniMaxConfigChanged
           ? miniMax
           : this.applyStalePolicy(miniMax, previousState.minimax)
         : this.state.minimax
+    })
+
+    const applyAntigravity = antigravityResultPromise.then((result) => {
+      if (signal.aborted) {
+        return
+      }
+      const antigravity = resolveAntigravityRateLimits(
+        settleSiblingProviderResult('antigravity', result),
+        gemini
+      )
+      this.trackActiveFailureStreak('antigravity', antigravity)
+      this.updateState({
+        ...this.state,
+        antigravity: this.applyStalePolicy(antigravity, previousState.antigravity)
+      })
     })
 
     const [grokSettled, cursorSettled, zcodeSettled] = await Promise.all([
@@ -237,5 +245,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           ? zcode
           : this.applyStalePolicy(zcode, previousState.zcode)
     })
+    await applyAntigravity
   }
 }

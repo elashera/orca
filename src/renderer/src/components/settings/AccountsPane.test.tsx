@@ -81,13 +81,22 @@ describe('AccountsPane', () => {
     }
   })
 
+  it('keeps the Gemini opt-in reachable through credential search', () => {
+    useAppStore.setState({ settingsSearchQuery: 'credentials' })
+    const markup = renderPane({ ...getDefaultSettings('/tmp'), geminiCliOAuthEnabled: true })
+    expect(markup).toContain('Gemini (Antigravity)')
+    expect(markup).toContain('<details open=""')
+    expect(markup).toContain('aria-checked="true"')
+    expect(markup).toContain('Use Gemini CLI credentials (experimental)')
+  })
+
   it('keeps the runtime label inside the localized account copy', () => {
     const markup = renderPane(getDefaultSettings('/tmp'))
 
     expect(markup).toContain('Showing accounts for this device. New accounts are added there.')
     expect(markup).toContain('Gemini (Antigravity)')
     expect(markup).toContain('<code>agy</code>')
-    expect(markup).not.toContain('Use Gemini CLI credentials')
+    expect(markup).toContain('Use Gemini CLI credentials')
     expect(markup).not.toContain('id="accounts-antigravity"')
     expect(markup).not.toContain('ShowingThis device')
     expect(markup).not.toContain('forThis device')

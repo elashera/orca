@@ -380,7 +380,7 @@ export function AccountsPane({
       ? renderCodexAccountsSection(model)
       : null,
     matchesSettingsSearch(searchQuery, getAccountsGeminiSearchEntries()) ? (
-      <AntigravityAccountsSection key="antigravity" />
+      <AntigravityAccountsSection key="antigravity" model={model} />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsOpencodeSearchEntries())
       ? renderOpenCodeAccountsSection(model)

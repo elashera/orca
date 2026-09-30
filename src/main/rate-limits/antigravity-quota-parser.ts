@@ -1,3 +1,8 @@
+import {
+  ANTIGRAVITY_FIVE_HOUR_MINUTES,
+  ANTIGRAVITY_WEEKLY_MINUTES,
+  getAntigravitySummaryBuckets
+} from '../../shared/antigravity-usage-windows'
 import type {
   ProviderRateLimits,
   RateLimitBucket,
@@ -7,11 +12,6 @@ import type {
 // Why: `agy -p /quota` prints one TAB-separated row per window:
 //   <family>\t<window label>\t<remaining %>\t<ISO reset time>
 const QUOTA_ROW_FIELD_COUNT = 4
-const FIVE_HOUR_WINDOW_MINUTES = 300
-const WEEKLY_WINDOW_MINUTES = 10080
-
-// Why: the Gemini family is the primary Antigravity quota, so it drives the compact session chip.
-const PRIMARY_FAMILY = 'Gemini Models'
 
 export type AntigravityQuotaRow = {
   family: string
@@ -27,16 +27,16 @@ function clampPercent(value: number): number {
 
 function windowMinutesForLabel(label: string): number | null {
   if (/five hour/i.test(label)) {
-    return FIVE_HOUR_WINDOW_MINUTES
+    return ANTIGRAVITY_FIVE_HOUR_MINUTES
   }
   if (/weekly/i.test(label)) {
-    return WEEKLY_WINDOW_MINUTES
+    return ANTIGRAVITY_WEEKLY_MINUTES
   }
   return null
 }
 
 function shortWindowLabel(windowMinutes: number): string {
-  return windowMinutes === WEEKLY_WINDOW_MINUTES ? 'Weekly' : '5h'
+  return windowMinutes === ANTIGRAVITY_WEEKLY_MINUTES ? 'Weekly' : '5h'
 }
 
 function toWindow(row: AntigravityQuotaRow): RateLimitWindow {
@@ -88,12 +88,10 @@ export function buildAntigravityRateLimits(
     name: `${row.family} · ${shortWindowLabel(row.windowMinutes)}`,
     ...toWindow(row)
   }))
-  const session = rows.find(
-    (row) => row.family === PRIMARY_FAMILY && row.windowMinutes === FIVE_HOUR_WINDOW_MINUTES
-  )
+  const [session] = getAntigravitySummaryBuckets(buckets)
   return {
     provider: 'antigravity',
-    session: session ? toWindow(session) : null,
+    session: session ?? null,
     // Why: both families' weekly windows live in buckets; the tooltip renders them there.
     weekly: null,
     buckets,

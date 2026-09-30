@@ -4,6 +4,9 @@ import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
+import { Label } from '../ui/label'
+import { Switch } from '../ui/switch'
+import type { AccountsPaneSectionModel } from './accounts-pane-types'
 import { SearchableSetting } from './SearchableSetting'
 import { translateSearchKeyword } from './settings-search-keywords'
 
@@ -21,6 +24,15 @@ export const getAccountsAntigravitySearchEntries = createLocalizedCatalog(() => 
         'auto.components.settings.appearance.search.antigravityKeyword',
         'antigravity'
       ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.933deaf732', 'oauth'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.7118d2f908',
+        'credentials'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.b7c2cee442',
+        'experimental'
+      ),
       ...translateSearchKeyword('settings.accounts.antigravity.command', 'agy'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.8630464352', 'cli'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.a9f3d7b5c8', 'login'),
@@ -31,9 +43,25 @@ export const getAccountsAntigravitySearchEntries = createLocalizedCatalog(() => 
   }
 ])
 
-export function AntigravityAccountsSection(): React.JSX.Element {
+export function AntigravityAccountsSection({
+  model
+}: {
+  model: Pick<
+    AccountsPaneSectionModel,
+    | 'settings'
+    | 'updateSettings'
+    | 'recordFeatureInteraction'
+    | 'localAccountRuntimeSentenceLabel'
+    | 'searchQuery'
+  >
+}): React.JSX.Element {
+  const { settings, updateSettings, recordFeatureInteraction, localAccountRuntimeSentenceLabel } =
+    model
   const refreshRateLimits = useAppStore((state) => state.refreshRateLimits)
   const [refreshing, setRefreshing] = useState(false)
+  const [legacySettingsExpanded, setLegacySettingsExpanded] = useState(
+    settings.geminiCliOAuthEnabled
+  )
   const [entry] = getAccountsAntigravitySearchEntries()
 
   async function refreshUsage(): Promise<void> {
@@ -76,6 +104,66 @@ export function AntigravityAccountsSection(): React.JSX.Element {
             : translate('settings.accounts.antigravity.refresh', 'Refresh usage')}
         </Button>
       </SearchableSetting>
+      <details
+        open={legacySettingsExpanded || Boolean(model.searchQuery)}
+        onToggle={(event) => setLegacySettingsExpanded(event.currentTarget.open)}
+      >
+        <summary className="cursor-pointer text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.AccountsPane.0c7f915b01',
+            'Use Gemini CLI credentials'
+          )}
+        </summary>
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.AccountsPane.0c7f915b01',
+            'Use Gemini CLI credentials'
+          )}
+          description={translate(
+            'auto.components.settings.AccountsPane.d676c41fc6',
+            'Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.'
+          )}
+          keywords={[
+            'gemini',
+            'cli',
+            'oauth',
+            'credentials',
+            'experimental',
+            'rate limit',
+            'status bar'
+          ]}
+          className="flex items-center justify-between gap-4 py-2"
+        >
+          <div className="space-y-0.5">
+            <Label>
+              {translate(
+                'auto.components.settings.AccountsPane.96f3649526',
+                'Use Gemini CLI credentials (experimental)'
+              )}
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.AccountsPane.c2aee76420',
+                'Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google for {{value0}}. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.',
+                { value0: localAccountRuntimeSentenceLabel }
+              )}
+            </p>
+          </div>
+          <Switch
+            aria-label={translate(
+              'auto.components.settings.AccountsPane.96f3649526',
+              'Use Gemini CLI credentials (experimental)'
+            )}
+            checked={settings.geminiCliOAuthEnabled}
+            onCheckedChange={(checked) => {
+              recordFeatureInteraction('usage-tracking')
+              updateSettings({
+                geminiCliOAuthEnabled: checked
+              })
+            }}
+          />
+        </SearchableSetting>
+      </details>
     </section>
   )
 }

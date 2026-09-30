@@ -29,7 +29,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 }))
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { UsageRosterPanel, UsageRow } from './UsageRosterPanel'
+import { UsageRosterPanel, UsageRow, getTightestUsageSection } from './UsageRosterPanel'
 import { ProviderPanel } from './tooltip'
 
 const signedOutCodex: ProviderRateLimits = {
@@ -44,6 +44,21 @@ const signedOutCodex: ProviderRateLimits = {
 describe('UsageRow', () => {
   beforeEach(() => {
     mocks.useResetCountdownClock.mockClear()
+  })
+
+  it('keeps compact summaries on Gemini even when another family is more exhausted', () => {
+    const quota: ProviderRateLimits = {
+      ...signedOutCodex,
+      provider: 'antigravity',
+      status: 'ok',
+      buckets: [
+        { name: 'Claude and GPT models · Weekly', windowMinutes: 10080, usedPercent: 99 },
+        { name: 'Gemini Models · Weekly', windowMinutes: 10080, usedPercent: 30 },
+        { name: 'Gemini Models · 5h', windowMinutes: 300, usedPercent: 20 }
+      ].map((bucket) => ({ ...bucket, resetsAt: null, resetDescription: null }))
+    }
+    expect(getTightestUsageSection(quota)?.label).toBe('Gemini Models · Weekly')
+    expect(getTightestUsageSection(quota)?.window.usedPercent).toBe(30)
   })
 
   it('summarizes Gemini windows while retaining other families in the detail panel', () => {

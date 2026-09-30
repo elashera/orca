@@ -70,6 +70,24 @@ describe('RateLimitService Antigravity usage', () => {
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
   })
 
+  it('publishes other providers while the Antigravity process is pending', async () => {
+    const pending = Promise.withResolvers<Awaited<ReturnType<typeof fetchAntigravityRateLimits>>>()
+    vi.mocked(fetchAntigravityRateLimits).mockReturnValue(pending.promise)
+    const service = new RateLimitService()
+    const refresh = service.refresh()
+    try {
+      await vi.waitFor(() => {
+        expect(service.getState().codex?.status).toBe('ok')
+        expect(service.getState().grok?.status).not.toBe('fetching')
+        expect(service.getState().antigravity?.status).toBe('fetching')
+      })
+    } finally {
+      pending.resolve(okProvider('antigravity', 42))
+      await refresh
+    }
+    expect(service.getState().antigravity?.session?.usedPercent).toBe(42)
+  })
+
   it('uses the Antigravity CLI read even when the Gemini read fails', async () => {
     vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(
       okProvider('antigravity', 42, Date.now())

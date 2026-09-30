@@ -1,3 +1,4 @@
+import { resolveHiddenRateLimitPtyCwd } from './hidden-rate-limit-pty-cwd'
 import { resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '../../shared/child-process/run-process'
@@ -94,6 +95,32 @@ describe('fetchAntigravityRateLimits', () => {
 
     expect(limits.status).toBe('unavailable')
     expect(limits.error).toBe('Antigravity CLI not found')
+  })
+
+  it.each(['EACCES', 'EPERM'])('keeps %s spawn failures as errors', async (code) => {
+    vi.mocked(runProcess).mockRejectedValue(
+      Object.assign(new Error('Cannot execute CLI'), { code })
+    )
+    expect(await fetchAntigravityRateLimits()).toMatchObject({
+      status: 'error',
+      error: 'Cannot execute CLI'
+    })
+  })
+
+  it('does not classify an ENOENT string without an error code as a missing CLI', async () => {
+    vi.mocked(runProcess).mockRejectedValue(new Error('Unexpected ENOENT response'))
+    expect((await fetchAntigravityRateLimits()).status).toBe('error')
+  })
+
+  it('contains a failure while preparing the hidden working directory', async () => {
+    vi.mocked(resolveHiddenRateLimitPtyCwd).mockImplementationOnce(() => {
+      throw new Error('Cannot prepare directory')
+    })
+    expect(await fetchAntigravityRateLimits()).toMatchObject({
+      status: 'error',
+      error: 'Cannot prepare directory'
+    })
+    expect(runProcess).not.toHaveBeenCalled()
   })
 
   it('reports a timeout without parsing partial output', async () => {

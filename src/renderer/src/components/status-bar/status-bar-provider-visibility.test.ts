@@ -127,7 +127,9 @@ describe('hasUsageProviderSettings', () => {
     ).toBe(true)
     // Why: a checked Antigravity item plus a detected CLI is a configured
     // provider; its `/quota` read does not need the Gemini OAuth opt-in.
-    expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(true)
+    expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(
+      false
+    )
     // Why: an OPENCODE_API_KEY or a key OpenCode saved on /connect is invisible
     // to the renderer, so main's presence flag is the only durable signal.
     expect(hasUsageProviderSettings(usageSettings({ opencodeGoApiKeyConfigured: true }))).toBe(true)
@@ -368,15 +370,13 @@ describe('getVisibleUsageProvider', () => {
     })
   })
 
-  it('shows the unavailable Antigravity snapshot when its status item is checked', () => {
-    // Why: Antigravity usage comes from the detected CLI's own `/quota` read,
-    // so a checked item is enough to keep the slot visible while it is signed out.
+  it('hides unavailable Antigravity even when its status item is checked', () => {
     const visible = getVisibleUsageProvider(
       'antigravity',
       provider('unavailable', { provider: 'antigravity', error: 'Antigravity CLI not found' }),
       usageSettings({ antigravityUsageConfigured: true })
     )
-    expect(visible).toMatchObject({ provider: 'antigravity', status: 'unavailable' })
+    expect(visible).toBeNull()
   })
 
   it('hides Antigravity when its status item is not checked', () => {
@@ -419,6 +419,25 @@ describe('isUsageEmptyState', () => {
   it('keeps a failing Cursor refresh visible so the error is not silently hidden', () => {
     const failing = provider('error', { provider: 'cursor' })
     expect(getVisibleUsageProvider('cursor', failing, usageSettings())).toBe(failing)
+  })
+
+  it('shows setup after an installed Antigravity CLI returns unavailable', () => {
+    expect(
+      isUsageEmptyState(
+        {
+          claude: provider('unavailable', { provider: 'claude' }),
+          codex: provider('unavailable', { provider: 'codex' }),
+          gemini: provider('unavailable'),
+          opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
+          kimi: provider('unavailable', { provider: 'kimi' }),
+          antigravity: provider('unavailable', { provider: 'antigravity' }),
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          grok: provider('unavailable', { provider: 'grok' }),
+          cursor: provider('unavailable', { provider: 'cursor' })
+        },
+        usageSettings({ antigravityUsageConfigured: true })
+      )
+    ).toBe(true)
   })
 
   it('waits for provider snapshots before showing the setup CTA', () => {

@@ -78,6 +78,13 @@ describe('buildAntigravityRateLimits', () => {
     ])
   })
 
+  it('uses the weekly Gemini bucket when its five-hour window is absent', () => {
+    const limits = buildAntigravityRateLimits(
+      parseAntigravityQuotaRows('Gemini Models\tWeekly Limit Remaining\t20%\t2026-09-16T15:37:31Z')
+    )
+    expect(limits.session).toMatchObject({ usedPercent: 80, windowMinutes: 10080 })
+  })
+
   it('keeps the buckets when the primary family is absent', () => {
     const limits = buildAntigravityRateLimits(
       parseAntigravityQuotaRows(
@@ -85,7 +92,7 @@ describe('buildAntigravityRateLimits', () => {
       )
     )
 
-    expect(limits.session).toBeNull()
+    expect(limits.session?.usedPercent).toBe(60)
     expect(limits.buckets).toHaveLength(1)
     expect(limits.buckets?.[0]?.usedPercent).toBe(60)
   })
