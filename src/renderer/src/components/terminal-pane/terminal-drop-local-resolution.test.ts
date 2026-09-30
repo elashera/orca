@@ -194,12 +194,11 @@ describe('local terminal drop resolution', () => {
       throw new Error('PTY write failed')
     })
     const pane = { id: 1, leafId: 'leaf-1', terminal: { focus: vi.fn() } }
+    const transport = createTerminalTransport(vi.fn(), 'pty-1', sendInputAccepted)
 
     await handleTerminalFileDrop({
       manager: { getActivePane: () => pane, getPanes: () => [pane] } as never,
-      paneTransports: new Map([
-        [1, createTerminalTransport(vi.fn(), 'pty-1', sendInputAccepted)]
-      ]) as never,
+      paneTransports: new Map([[1, transport]]) as never,
       worktreeId: 'wt-1',
       tabId: 'tab-1',
       cwd: undefined,
