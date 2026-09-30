@@ -104,11 +104,16 @@ export function AntigravityAccountsSection({
             : translate('settings.accounts.antigravity.refresh', 'Refresh usage')}
         </Button>
       </SearchableSetting>
-      <details
-        open={legacySettingsExpanded || Boolean(model.searchQuery)}
-        onToggle={(event) => setLegacySettingsExpanded(event.currentTarget.open)}
-      >
-        <summary className="cursor-pointer text-xs text-muted-foreground">
+      <details open={legacySettingsExpanded || Boolean(model.searchQuery)}>
+        <summary
+          className="cursor-pointer text-xs text-muted-foreground"
+          onClick={(event) => {
+            event.preventDefault()
+            if (!model.searchQuery) {
+              setLegacySettingsExpanded((expanded) => !expanded)
+            }
+          }}
+        >
           {translate(
             'auto.components.settings.AccountsPane.0c7f915b01',
             'Use Gemini CLI credentials'

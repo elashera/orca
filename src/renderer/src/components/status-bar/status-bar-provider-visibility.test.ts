@@ -125,8 +125,7 @@ describe('hasUsageProviderSettings', () => {
     expect(
       hasUsageProviderSettings(usageSettings({ opencodeSessionCookie: ' session=abc ' }))
     ).toBe(true)
-    // Why: a checked Antigravity item plus a detected CLI is a configured
-    // provider; its `/quota` read does not need the Gemini OAuth opt-in.
+    // CLI detection does not prove a signed-in account; wait for the quota snapshot.
     expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(
       false
     )
