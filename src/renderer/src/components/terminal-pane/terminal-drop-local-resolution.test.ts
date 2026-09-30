@@ -180,6 +180,42 @@ describe('local terminal drop resolution', () => {
     })
   })
 
+  it('reports resolver failures and the write error separately when the terminal rejects the paste', async () => {
+    mocks.storeState.repos = [
+      { id: 'repo1', connectionId: null, path: '/repo', executionHostId: 'local' }
+    ]
+    mocks.storeState.worktreesByRepo = { repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/repo' }] }
+    mocks.resolveDroppedPathsForAgent.mockResolvedValue({
+      resolvedPaths: ['/Users/me/spec.pdf'],
+      skipped: [],
+      failed: [{ sourcePath: '/Users/me/broken.pdf', reason: 'EIO: i/o error' }]
+    })
+    const sendInputAccepted = vi.fn(async () => {
+      throw new Error('PTY write failed')
+    })
+    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus: vi.fn() } }
+
+    await handleTerminalFileDrop({
+      manager: { getActivePane: () => pane, getPanes: () => [pane] } as never,
+      paneTransports: new Map([
+        [1, createTerminalTransport(vi.fn(), 'pty-1', sendInputAccepted)]
+      ]) as never,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      cwd: undefined,
+      data: { paths: ['/Users/me/spec.pdf', '/Users/me/broken.pdf'], target: 'terminal' }
+    })
+
+    expect(sendInputAccepted).toHaveBeenCalledOnce()
+    expect(mocks.toastError).toHaveBeenCalledWith('Could not prepare 1 dropped file.', {
+      description: 'EIO: i/o error'
+    })
+    expect(mocks.toastError).toHaveBeenCalledWith('PTY write failed')
+    expect(mocks.toastError).not.toHaveBeenCalledWith(
+      expect.stringContaining('resolve dropped files')
+    )
+  })
+
   it('does not paste into a replacement PTY when the target changed during local resolution', async () => {
     mocks.storeState.repos = [
       { id: 'repo1', connectionId: null, path: '/repo', executionHostId: 'local' }

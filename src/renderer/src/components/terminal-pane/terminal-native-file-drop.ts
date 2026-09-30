@@ -226,11 +226,18 @@ async function pasteLocalDropPaths(
   // passes every other path through. Local WSL UNC worktrees run POSIX shells
   // despite a Windows host, so main also applies the distro-aware rewrite.
   const wslUncWorktree = isWslUncPath(args.worktreePath)
+  let resolution: Awaited<ReturnType<typeof window.api.fs.resolveDroppedPathsForAgent>>
   try {
-    const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({
+    resolution = await window.api.fs.resolveDroppedPathsForAgent({
       paths: args.dataPaths,
       worktreePath: args.worktreePath
     })
+  } catch (err) {
+    toast.error(extractIpcErrorMessage(err, 'Failed to resolve dropped files.'))
+    return
+  }
+  const { resolvedPaths, skipped, failed } = resolution
+  try {
     await pasteResolvedDropPaths({
       ...args,
       paths:
@@ -239,9 +246,9 @@ async function pasteLocalDropPaths(
           : resolvedPaths,
       targetShell: wslUncWorktree ? 'posix' : args.targetShell
     })
+  } finally {
+    // Why: a rejected write surfaces via the caller's catch; it must not hide resolver skips.
     reportTerminalDropUploadSkipsAndFailures(skipped, failed, 'prepare')
-  } catch (err) {
-    toast.error(extractIpcErrorMessage(err, 'Failed to resolve dropped files.'))
   }
 }
 
