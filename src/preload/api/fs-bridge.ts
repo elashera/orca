@@ -169,7 +169,7 @@ export const fsApi = {
   resolveDroppedPathsForAgent: (
     args: {
       paths: string[]
-      worktreePath: string
+      worktreePath?: string
       connectionId?: string
     } & SshMutationExpectation
   ): Promise<ResolveDroppedPathsResult> =>

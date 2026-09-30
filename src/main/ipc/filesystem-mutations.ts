@@ -1,11 +1,17 @@
 import { app, ipcMain } from 'electron'
 import { constants } from 'node:fs'
 import { copyFile, mkdir, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { basename, dirname } from 'node:path'
 import type { Store } from '../persistence'
 import { resolveAuthorizedPath } from './filesystem-auth'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { resolveLocalDroppedPathsForAgent } from './dropped-path-resolution'
+import {
+  getDragTempCopyRoot,
+  sweepExpiredDragTempCopies,
+  type LocalDropItemResult
+} from './dragged-temp-file-copy'
 import { importExternalPathsSsh } from './filesystem-import-ssh'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
@@ -252,19 +258,22 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     }
   )
 
-  // Why: terminal drag-and-drop resolver. Local worktrees pass paths through
-  // unchanged (reference-in-place; preserves zero-latency drop). SSH worktrees
-  // upload each path into `${worktreePath}/.orca/drops/` and return remote
-  // paths the remote agent can read. Kept as a separate IPC from
-  // fs:importExternalPaths because terminal semantics differ from the
-  // explorer's "copy into user-picked destDir". See docs/terminal-drop-ssh.md.
+  // Why: terminal and composer drag-and-drop resolver. Local drops pass
+  // through unchanged except macOS drag-temp files, which are copied into
+  // Orca-owned storage the PTY daemon can read. SSH worktrees upload each path
+  // into `${worktreePath}/.orca/drops/` and return remote paths the remote
+  // agent can read. Kept as a separate IPC from fs:importExternalPaths because
+  // terminal semantics differ from the explorer's "copy into user-picked
+  // destDir". See docs/terminal-drop-ssh.md and
+  // docs/reference/macos-dropped-temp-file-materialization.md.
   ipcMain.handle(
     'fs:resolveDroppedPathsForAgent',
     async (
-      _event,
+      event,
       args: {
         paths: string[]
-        worktreePath: string
+        /** Optional for local drops (a composer with no project yet); required for SSH. */
+        worktreePath?: string
         connectionId?: string
       } & SshMutationExpectation
     ): Promise<ResolveDroppedPathsResult> => {
@@ -277,11 +286,25 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       // Why: `== null` (not `!args.connectionId`) so an empty string is
       // treated as a renderer error, not silently routed to the local branch.
       if (args.connectionId == null) {
-        return {
-          resolvedPaths: resolveLocalDroppedPathsForAgent(args.paths, args.worktreePath),
-          skipped: [],
-          failed: []
+        const lifetime = abortWhenRendererGone(event.sender)
+        try {
+          const results = await resolveLocalDroppedPathsForAgent(
+            args.paths,
+            args.worktreePath,
+            {
+              platform: process.platform,
+              sourceTempRoot: tmpdir(),
+              copyRoot: getDragTempCopyRoot(app.getPath('temp'))
+            },
+            lifetime.signal
+          )
+          return foldDroppedPathResults(results)
+        } finally {
+          lifetime.dispose()
         }
+      }
+      if (!args.worktreePath?.trim()) {
+        throw new Error('No remote project path is available for dropped files.')
       }
       const worktreePath = args.worktreePath.replace(/\/+$/, '')
       const destDir = `${worktreePath}/.orca/drops`
@@ -295,20 +318,43 @@ export function registerFilesystemMutationHandlers(store: Store): void {
             args.expectedExecutionHostId
           )
       })
-      const resolvedPaths: string[] = []
-      const skipped: { sourcePath: string; reason: ImportSkipReason }[] = []
-      const failed: { sourcePath: string; reason: string }[] = []
-      // Iterate in input order so injected paths align with the user's drop order.
-      for (const r of results) {
-        if (r.status === 'imported') {
-          resolvedPaths.push(r.destPath)
-        } else if (r.status === 'skipped') {
-          skipped.push({ sourcePath: r.sourcePath, reason: r.reason })
-        } else {
-          failed.push({ sourcePath: r.sourcePath, reason: r.reason })
-        }
-      }
-      return { resolvedPaths, skipped, failed }
+      return foldDroppedPathResults(results)
     }
   )
+
+  scheduleDragTempCopySweep()
+}
+
+function foldDroppedPathResults(
+  results: readonly (ImportItemResult | LocalDropItemResult)[]
+): ResolveDroppedPathsResult {
+  const resolvedPaths: string[] = []
+  const skipped: { sourcePath: string; reason: ImportSkipReason }[] = []
+  const failed: { sourcePath: string; reason: string }[] = []
+  // Iterate in input order so injected paths align with the user's drop order.
+  for (const r of results) {
+    if (r.status === 'imported') {
+      resolvedPaths.push(r.destPath)
+    } else if (r.status === 'skipped') {
+      skipped.push({ sourcePath: r.sourcePath, reason: r.reason })
+    } else {
+      failed.push({ sourcePath: r.sourcePath, reason: r.reason })
+    }
+  }
+  return { resolvedPaths, skipped, failed }
+}
+
+const DRAG_TEMP_COPY_SWEEP_DELAY_MS = 30 * 1000
+
+function scheduleDragTempCopySweep(): void {
+  if (process.platform !== 'darwin') {
+    return
+  }
+  // Why: deferred so startup I/O is not competing with a sweep of old copies.
+  const timer = setTimeout(() => {
+    void Promise.resolve()
+      .then(() => sweepExpiredDragTempCopies(getDragTempCopyRoot(app.getPath('temp'))))
+      .catch(() => undefined)
+  }, DRAG_TEMP_COPY_SWEEP_DELAY_MS)
+  timer.unref()
 }

@@ -14,6 +14,7 @@ const { handleMock, copyFileMock, lstatMock, mkdirMock, renameMock, writeFileMoc
   }))
 
 vi.mock('electron', () => ({
+  app: { getPath: () => path.resolve('/tmp/app-temp') },
   ipcMain: { handle: handleMock }
 }))
 
@@ -499,6 +500,34 @@ describe('registerFilesystemMutationHandlers', () => {
       expect(copyFileMock).not.toHaveBeenCalled()
     }
   )
+
+  // ── fs:resolveDroppedPathsForAgent ─────────────────────────────
+
+  const rendererEvent = { sender: { once: vi.fn(), removeListener: vi.fn() } }
+
+  it('resolves local drops without a project path and returns ordinary paths unchanged', async () => {
+    const paths = [path.resolve('/Users/me/Desktop/notes.txt'), path.resolve('/tmp/a b.png')]
+
+    await expect(
+      handlers.get('fs:resolveDroppedPathsForAgent')!(rendererEvent, { paths })
+    ).resolves.toEqual({ resolvedPaths: paths, skipped: [], failed: [] })
+    expect(rendererEvent.sender.removeListener).toHaveBeenCalled()
+  })
+
+  it('rejects an SSH drop with no destination before uploading', async () => {
+    setSshConnectionGeneration('ssh-1', 1)
+
+    // Why: no provider is registered, so reaching the upload would fail differently.
+    await expect(
+      handlers.get('fs:resolveDroppedPathsForAgent')!(rendererEvent, {
+        paths: [path.resolve('/tmp/source.ts')],
+        worktreePath: '  ',
+        connectionId: 'ssh-1',
+        expectedSshTargetId: 'ssh-1',
+        expectedSshConnectionGeneration: 1
+      })
+    ).rejects.toThrow('No remote project path is available for dropped files.')
+  })
 
   // ── fs:copy ────────────────────────────────────────────────────
 
