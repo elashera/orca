@@ -85,7 +85,10 @@ describe('AccountsPane', () => {
     const markup = renderPane(getDefaultSettings('/tmp'))
 
     expect(markup).toContain('Showing accounts for this device. New accounts are added there.')
-    expect(markup).toContain('authenticate with Google for this device. This uses credentials')
+    expect(markup).toContain('Gemini (Antigravity)')
+    expect(markup).toContain('<code>agy</code>')
+    expect(markup).not.toContain('Use Gemini CLI credentials')
+    expect(markup).not.toContain('id="accounts-antigravity"')
     expect(markup).not.toContain('ShowingThis device')
     expect(markup).not.toContain('forThis device')
   })

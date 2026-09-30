@@ -128,7 +128,18 @@ export function UsageRow({
   now: number
   mode?: StatusBarUsageMode
 }): React.JSX.Element {
-  const sections = usedSections(p)
+  const allSections = usedSections(p)
+  const geminiSections =
+    p.provider === 'antigravity'
+      ? allSections.filter(
+          (section) =>
+            section.label === 'Gemini Models · 5h' || section.label === 'Gemini Models · Weekly'
+        )
+      : []
+  const sections =
+    geminiSections.length > 0
+      ? geminiSections.sort((a, b) => a.window.windowMinutes - b.window.windowMinutes)
+      : allSections
   const hasUsage = sections.length > 0
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)

@@ -1,5 +1,5 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
-import { deriveAntigravityRateLimits } from '../antigravity-usage-mirror'
+import { resolveAntigravityRateLimits } from '../antigravity-usage-mirror'
 import { settleSiblingProviderResult } from './service-sibling-provider-result'
 import type { ProviderRateLimits } from './service-types'
 
@@ -33,7 +33,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         geminiResult,
         opencodeGoResult,
         kimiResult,
-        miniMaxResult
+        miniMaxResult,
+        antigravityResult
       ],
       grokResultPromise,
       cursorResultPromise,
@@ -82,8 +83,10 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    // Why: Antigravity can only borrow a *successful* Gemini read; a Gemini failure is not an Antigravity failure.
-    const antigravity = deriveAntigravityRateLimits(gemini)
+    const antigravityFetch = settleSiblingProviderResult('antigravity', antigravityResult)
+
+    // Why: the CLI's own `/quota` read wins; the borrowed Gemini snapshot is only a fallback.
+    const antigravity = resolveAntigravityRateLimits(antigravityFetch, gemini)
 
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'
